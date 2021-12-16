@@ -8,6 +8,10 @@
 import SwiftUI
 import AudioKit
 import AudioKitEX
+import AVFoundation
+
+//MARK: Recorder conductor class settings
+
 
 struct RecorderData {
     var isRecording = false
@@ -20,7 +24,10 @@ class RecorderConductor: ObservableObject {
     
     let audioEngine = AudioEngine()
     let audioPlayer = AudioPlayer()
+    var mic: AudioEngine.InputNode?
     let mixer = Mixer()
+    let inputDevices = Settings.session.availableInputs
+    var inputDeviceList = [String]()
     var recorder: NodeRecorder?
     var silencer: Fader?
     
@@ -56,15 +63,33 @@ class RecorderConductor: ObservableObject {
         
     }
     
-    
+//   MARK: initializer
     
     init() {
+//        do{
+//            
+//        Settings.bufferLength = .long
+//            
+//            try AVAudioSession.sharedInstance().setPreferredIOBufferDuration(Settings.bufferLength.duration)
+//            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, options: [.defaultToSpeaker, .allowBluetoothA2DP, .duckOthers])
+//            try AVAudioSession.sharedInstance().setActive(true)
+//            
+//            
+//        }catch{
+//            Log("Could not correctly set session")
+//        }
+        
         guard let input = audioEngine.input else {fatalError("Could not set engine to input")}
+         
         do {
             recorder = try NodeRecorder(node: input)
         } catch {
             fatalError("Could not start nodeRecorder")
         }
+        
+        
+        mic = audioEngine.input
+        
         let silencer = Fader(input, gain: 0)
         self.silencer = silencer
         mixer.addInput(silencer)
@@ -80,10 +105,8 @@ class RecorderConductor: ObservableObject {
         } catch {
             Log("Could not start audioEngine")
         }
-        
-        
-        
     }
+    
     
     
     
@@ -93,7 +116,7 @@ class RecorderConductor: ObservableObject {
     
 }
 
-
+//MARK: Main view
 
 struct ContentView: View {
     
@@ -148,7 +171,7 @@ struct ContentView: View {
             
             
             Spacer()
-            
+//     MARK: Swipe view
             
             GeometryReader {geometry in
                 HStack{
@@ -165,13 +188,16 @@ struct ContentView: View {
                     
                     if swipe.translation.width < 0 {
                         
-                        self.conductor.data.isPlaying.toggle()
+                        self.conductor.data.isRecording = false
+                        self.conductor.data.isPlaying = true
+                        
                         
                         backgroundColor = Color("playbackViewBG")
                     }
                     if swipe.translation.width > 0 {
                         
-                        self.conductor.data.isRecording.toggle()
+                        self.conductor.data.isPlaying = false
+                        self.conductor.data.isRecording = true
                         
                         backgroundColor = Color("recordViewBG")
                     }
