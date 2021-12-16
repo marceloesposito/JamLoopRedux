@@ -7,29 +7,99 @@
 
 import SwiftUI
 import AudioKit
+import AudioKitEX
 
-struct ContentView: View {
-    
-    let player = AudioPlayer()
-    let engine = AudioEngine()
-    
-    func preparePlayer(){
-    var fileURL = [URL]()
-    let files = ["hi_tom_D2.wav", "snare_D1.wav"]
+struct RecorderData {
+    var isRecording = false
+    var isPlaying = false
+}
 
-        for filename in files {
-            guard let url = Bundle.main.resourceURL?.appendingPathComponent(
-                    "Samples/\(filename)") else {
-                Log("failed to load sample", filename)
-                return
+class RecorderConductor: ObservableObject {
+    
+    
+    
+    let audioEngine = AudioEngine()
+    let audioPlayer = AudioPlayer()
+    let mixer = Mixer()
+    var recorder: NodeRecorder?
+    var silencer: Fader?
+    
+    
+    
+    @Published var data = RecorderData(){
+        
+        
+        
+        didSet{
+            if data.isRecording{
+                NodeRecorder.removeTempFiles()
+                do{
+                    try recorder?.record()
+                } catch {
+                    Log("Could not record")
+                }
+            } else {
+                recorder?.stop()
             }
-            fileURL.append(url)
+            
+            if data.isPlaying{
+                if let file = recorder?.audioFile{
+                    audioPlayer.file = file
+                    audioPlayer.play()
+                } else {
+                    audioPlayer.stop()
+                }
+            }
         }
-        try? player.load(url: fileURL[0])
         
         
         
     }
+    
+    
+    
+    init() {
+        guard let input = audioEngine.input else {fatalError("Could not set engine to input")}
+        do {
+            recorder = try NodeRecorder(node: input)
+        } catch {
+            fatalError("Could not start nodeRecorder")
+        }
+        let silencer = Fader(input, gain: 0)
+        self.silencer = silencer
+        mixer.addInput(silencer)
+        mixer.addInput(audioPlayer)
+        audioEngine.output = mixer
+    }
+    
+    
+    
+    func start() {
+        do {
+            try audioEngine.start()
+        } catch {
+            Log("Could not start audioEngine")
+        }
+        
+        
+        
+    }
+    
+    
+    
+    func stop(){
+        audioEngine.stop()
+    }
+    
+}
+
+
+
+struct ContentView: View {
+    
+
+    
+    @StateObject var conductor = RecorderConductor()
     
     
     
@@ -39,24 +109,39 @@ struct ContentView: View {
         
         VStack{
             HStack{
+                
+                
+                
                 Spacer()
+                
+                
                 
                 Button{}label: {
                     Image(systemName: "gear").font(.title2).foregroundColor(.white)
                 }
                 
+                
+                
                 Spacer()
-                RoundedRectangle(cornerRadius: 40).frame(width: 100, height: 20).foregroundColor(.white).padding(.horizontal, 15)
-                RoundedRectangle(cornerRadius: 40).frame(width: 100, height: 20).foregroundColor(.white.opacity(0.5)).padding(.horizontal, 15)
-                RoundedRectangle(cornerRadius: 40).frame(width: 100, height: 20).foregroundColor(.white.opacity(0.5)).padding(.horizontal, 15)
-                RoundedRectangle(cornerRadius: 40).frame(width: 100, height: 20).foregroundColor(.white.opacity(0.5)).padding(.horizontal, 15)
+                
+                
+                
+                ProgressBarView()
+                
+                
+                
                 Spacer()
+                
+                
                 
                 Button{}label: {
                     Image(systemName: "metronome.fill").font(.title2).foregroundColor(.white)
                 }
                 
+                
+                
                 Spacer()
+                
                 
                 
             }.padding(.top,30)
@@ -80,10 +165,14 @@ struct ContentView: View {
                     
                     if swipe.translation.width < 0 {
                         
+                        self.conductor.data.isPlaying.toggle()
                         
                         backgroundColor = Color("playbackViewBG")
                     }
                     if swipe.translation.width > 0 {
+                        
+                        self.conductor.data.isRecording.toggle()
+                        
                         backgroundColor = Color("recordViewBG")
                     }
                 }))
@@ -92,7 +181,10 @@ struct ContentView: View {
         
         
    
-        }.background(backgroundColor)
+        }.onAppear(perform: self.conductor.start)
+            .onDisappear(perform: self.conductor.stop)
+        .background(backgroundColor)
+        
 
         
     }
